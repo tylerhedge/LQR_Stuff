@@ -35,7 +35,7 @@ public class Robot extends TimedRobot {
 
   // Reduction between motors and encoder, as output over input. If the flywheel spins slower than
   // the motors, this number should be greater than one.
-  private static final double kFlywheelGearing = 1.0;
+  private static final double kFlywheelGearing = 2.0;
 
   // The plant holds a state-space model of our flywheel. This system has the following properties:
   //
@@ -44,7 +44,7 @@ public class Robot extends TimedRobot {
   // Outputs (what we can measure): [velocity], in radians per second.
   private final LinearSystem<N1, N1, N1> m_flywheelPlant =
       LinearSystemId.createFlywheelSystem(
-          DCMotor.getNEO(2), kFlywheelMomentOfInertia, kFlywheelGearing);
+          DCMotor.getFalcon500(2), kFlywheelMomentOfInertia, kFlywheelGearing);
 
   // The observer fuses our encoder data and voltage inputs to reject noise.
   private final KalmanFilter<N1, N1, N1> m_observer =
