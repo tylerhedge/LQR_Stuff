@@ -34,7 +34,7 @@ public class Robot extends TimedRobot {
   private static final int kJoystickPort = 0;
   private static final double kSpinupRadPerSec = Units.rotationsPerMinuteToRadiansPerSecond(500.0);
 
-  private static final double kFlywheelMomentOfInertia = 0.00032; // kg * m^2
+  private static final double kFlywheelMomentOfInertia = 0.00209; // kg * m^2
 
   // Reduction between motors and encoder, as output over input. If the flywheel spins slower than
   // the motors, this number should be greater than one.
@@ -64,10 +64,10 @@ public class Robot extends TimedRobot {
   private final LinearQuadraticRegulator<N1, N1, N1> m_controller =
       new LinearQuadraticRegulator<>(
           m_flywheelPlant,
-          VecBuilder.fill(8.0), // qelms. Velocity error tolerance, in radians per second. Decrease
+          VecBuilder.fill(6.2), // qelms. Velocity error tolerance, in radians per second. Decrease
           // this to more heavily penalize state excursion, or make the controller behave more
           // aggressively.
-          VecBuilder.fill(12.0), // relms. Control effort (voltage) tolerance. Decrease this to more
+          VecBuilder.fill(12), // relms. Control effort (voltage) tolerance. Decrease this to more
           // heavily penalize control effort, or make the controller less aggressive. 12 is a good
           // starting point because that is the (approximate) maximum voltage of a battery.
           0.020); // Nominal time between loops. 0.020 for TimedRobot, but can be
@@ -90,22 +90,26 @@ public class Robot extends TimedRobot {
   public void robotInit() {
     // We go 2 pi radians per 4096 clicks.
     m_encoder.setDistancePerPulse(2.0 * Math.PI / 4096.0);
+    SmartDashboard.putBoolean("spinup", false);
+    SmartDashboard.putNumber("encoder velo", 0);
+    SmartDashboard.putNumber("target", 0);
   }
 
   @Override
   public void teleopInit() {
-    m_loop.reset(VecBuilder.fill(m_encoder.getRate()));
+    m_loop.reset(VecBuilder.fill(m_encoderSim.getRate()));
   }
 
   @Override 
   public void simulationPeriodic(){
-    m_encoderSim.setRate(m_flywheelSim.getAngularVelocityRPM()*2048);
+    m_encoderSim.setRate(m_flywheelSim.getAngularVelocityRadPerSec());
       // Sets the target speed of our flywheel. This is similar to setsting the setpoint of a
     // PID controller.
-    if (m_joystick.getTriggerPressed()) {
+    SmartDashboard.putNumber("spinup velo", kSpinupRadPerSec);
+    if (SmartDashboard.getBoolean("spinup", false)) {
       // We just pressed the trigger, so let's set our next reference
-      m_loop.setNextR(VecBuilder.fill(kSpinupRadPerSec));
-    } else if (m_joystick.getTriggerReleased()) {
+      m_loop.setNextR(VecBuilder.fill(SmartDashboard.getNumber("target", 0)));
+    } else {
       // We just released the trigger, so let's spin down
       m_loop.setNextR(VecBuilder.fill(0.0));
     }
@@ -121,9 +125,11 @@ public class Robot extends TimedRobot {
     // voltage = duty cycle * battery voltage, so
     // duty cycle = voltage / battery voltage
     double nextVoltage = m_loop.getU(0);
+    SmartDashboard.putNumber("nextv",  nextVoltage);
     m_flywheelSim.setInput(nextVoltage);
+    m_flywheelSim.update(0.02);
 
-    SmartDashboard.putNumber("error", m_loop.getError(1));
+    SmartDashboard.putNumber("error", m_loop.getError(0));
     SmartDashboard.putNumber("effort (current)", m_flywheelSim.getCurrentDrawAmps());
     SmartDashboard.putNumber("velocity", m_flywheelSim.getAngularVelocityRPM());
   }
