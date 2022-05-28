@@ -38,7 +38,7 @@ public class Robot extends TimedRobot {
 
   // Reduction between motors and encoder, as output over input. If the flywheel spins slower than
   // the motors, this number should be greater than one.
-  private static final double kFlywheelGearing = 2.0;
+  private static final double kFlywheelGearing = 0.5;
 
   // The plant holds a state-space model of our flywheel. This system has the following properties:
   //
