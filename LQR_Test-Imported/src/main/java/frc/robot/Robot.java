@@ -82,6 +82,7 @@ public class Robot extends TimedRobot {
   private final FlywheelSim m_flywheelSim = new FlywheelSim(m_flywheelPlant, DCMotor.getFalcon500(2), 2);
   private final EncoderSim m_encoderSim = new EncoderSim(m_encoder);
   private final MotorController m_motor = new PWMSparkMax(kMotorPort);
+  boolean shoot = false;
 
   // A joystick to read the trigger from.
   private final Joystick m_joystick = new Joystick(kJoystickPort);
@@ -89,14 +90,18 @@ public class Robot extends TimedRobot {
   @Override
   public void robotInit() {
     // We go 2 pi radians per 4096 clicks.
-    m_encoder.setDistancePerPulse(2.0 * Math.PI / 4096.0);
     SmartDashboard.putBoolean("spinup", false);
-    SmartDashboard.putNumber("encoder velo", 0);
-    SmartDashboard.putNumber("target", 0);
+    SmartDashboard.putNumber("target", 732);
+    SmartDashboard.putBoolean("shoot", false);
   }
 
   @Override
   public void teleopInit() {
+    m_loop.reset(VecBuilder.fill(m_encoderSim.getRate()));
+  }
+
+  @Override
+  public void simulationInit(){
     m_loop.reset(VecBuilder.fill(m_encoderSim.getRate()));
   }
 
@@ -105,20 +110,20 @@ public class Robot extends TimedRobot {
     m_encoderSim.setRate(m_flywheelSim.getAngularVelocityRadPerSec());
       // Sets the target speed of our flywheel. This is similar to setsting the setpoint of a
     // PID controller.
-    SmartDashboard.putNumber("spinup velo", kSpinupRadPerSec);
     if (SmartDashboard.getBoolean("spinup", false)) {
       // We just pressed the trigger, so let's set our next reference
       m_loop.setNextR(VecBuilder.fill(SmartDashboard.getNumber("target", 0)));
     } else {
       // We just released the trigger, so let's spin down
-      m_loop.setNextR(VecBuilder.fill(0.0));
     }
-
+    if (SmartDashboard.getBoolean("shoot", false) == true && shoot == false) m_encoderSim.setRate(m_encoderSim.getRate() - 100);
+    shoot = SmartDashboard.getBoolean("shoot", false);
     // Correct our Kalman filter's state vector estimate with encoder data.
     m_loop.correct(VecBuilder.fill(m_encoderSim.getRate()));
 
     // Update our LQR to generate new voltage commands and use the voltages to predict the next
     // state with out Kalman filter.
+    
     m_loop.predict(0.020);
 
     // Send the new calculated voltage to the motors.
@@ -126,12 +131,13 @@ public class Robot extends TimedRobot {
     // duty cycle = voltage / battery voltage
     double nextVoltage = m_loop.getU(0);
     SmartDashboard.putNumber("nextv",  nextVoltage);
-    m_flywheelSim.setInput(nextVoltage);
+    if (!SmartDashboard.getBoolean("spinup", false)) nextVoltage = 0;
+    m_flywheelSim.setInputVoltage(nextVoltage);
     m_flywheelSim.update(0.02);
 
     SmartDashboard.putNumber("error", m_loop.getError(0));
     SmartDashboard.putNumber("effort (current)", m_flywheelSim.getCurrentDrawAmps());
-    SmartDashboard.putNumber("velocity", m_flywheelSim.getAngularVelocityRPM());
+    SmartDashboard.putNumber("velocity", m_encoderSim.getRate());
   }
 
   @Override
