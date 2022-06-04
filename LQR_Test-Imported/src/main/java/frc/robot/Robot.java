@@ -4,6 +4,12 @@
 
 package frc.robot;
 
+import com.ctre.phoenix.motorcontrol.FollowerType;
+import com.ctre.phoenix.motorcontrol.SupplyCurrentLimitConfiguration;
+import com.ctre.phoenix.motorcontrol.TalonFXControlMode;
+import com.ctre.phoenix.motorcontrol.TalonFXInvertType;
+import com.ctre.phoenix.motorcontrol.can.TalonFX;
+
 import edu.wpi.first.math.Nat;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.controller.LinearQuadraticRegulator;
@@ -16,6 +22,7 @@ import edu.wpi.first.math.system.plant.LinearSystemId;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.motorcontrol.MotorController;
 import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
@@ -28,6 +35,14 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
  * flywheel.
  */
 public class Robot extends TimedRobot {
+  //real stuff
+  private static final int kLeadID = 9;
+  private static final int kFollowerID = 11;
+  private static final TalonFXInvertType kFollowerInvert = TalonFXInvertType.OpposeMaster;
+  private TalonFX lead;
+  private TalonFX follow;
+
+  //sim stuff
   private static final int kMotorPort = 0;
   private static final int kEncoderAChannel = 0;
   private static final int kEncoderBChannel = 1;
@@ -93,11 +108,20 @@ public class Robot extends TimedRobot {
     SmartDashboard.putBoolean("spinup", false);
     SmartDashboard.putNumber("target", 732);
     SmartDashboard.putBoolean("shoot", false);
+    lead = new TalonFX(kLeadID);
+    follow = new TalonFX(kFollowerID);
+    follow.setInverted(kFollowerInvert);
+    follow.follow(lead);
+
+    lead.configSupplyCurrentLimit(new SupplyCurrentLimitConfiguration(true, 40.0, 40.0, 1.0));
+    follow.configSupplyCurrentLimit(new SupplyCurrentLimitConfiguration(true, 40.0, 40.0, 1.0));
+
+
   }
 
   @Override
   public void teleopInit() {
-    m_loop.reset(VecBuilder.fill(m_encoderSim.getRate()));
+    m_loop.reset(VecBuilder.fill(0));
   }
 
   @Override
@@ -142,6 +166,32 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopPeriodic() {
-  
+    if (SmartDashboard.getBoolean("spinup", false)) {
+      // We just pressed the trigger, so let's set our next reference
+      m_loop.setNextR(VecBuilder.fill(SmartDashboard.getNumber("target", 0))); 
+    }
+    else {
+      m_loop.setNextR(VecBuilder.fill(0)); 
+    }
+
+    m_loop.correct(VecBuilder.fill(getEncoderRadsPerSec()));
+    m_loop.predict(0.020);
+    double nextVoltage = m_loop.getU(0);
+
+    if (!SmartDashboard.getBoolean("spinup", false)); nextVoltage = 0; //if we are spinning down we dont want to fight down
+
+    lead.set(TalonFXControlMode.PercentOutput, nextVoltage/RobotController.getBatteryVoltage());
+
+
+
+  }
+
+  public double getEncoderRadsPerSec(){
+    double temp; //motor ticks/100ms
+    temp = lead.getSelectedSensorVelocity()/kFlywheelGearing; //"flywheel ticks" per 100 ms
+    temp /=2048; //flywheel rotations per 100ms
+    temp *= 10; //flywheel rotations per second
+    temp *= (2*Math.PI); //flywheel radians per second
+    return temp;
   }
 }
