@@ -48,12 +48,13 @@ public class Robot extends TimedRobot {
   private static final int kEncoderBChannel = 1;
   private static final int kJoystickPort = 0;
   private static final double kSpinupRadPerSec = Units.rotationsPerMinuteToRadiansPerSecond(500.0);
+  private boolean spinningUp;
 
   private static final double kFlywheelMomentOfInertia = 0.00209; // kg * m^2
 
   // Reduction between motors and encoder, as output over input. If the flywheel spins slower than
   // the motors, this number should be greater than one.
-  private static final double kFlywheelGearing = 0.5;
+  private static final double kFlywheelGearing = 60/48  ;
 
   // The plant holds a state-space model of our flywheel. This system has the following properties:
   //
@@ -79,10 +80,10 @@ public class Robot extends TimedRobot {
   private final LinearQuadraticRegulator<N1, N1, N1> m_controller =
       new LinearQuadraticRegulator<>(
           m_flywheelPlant,
-          VecBuilder.fill(6.2), // qelms. Velocity error tolerance, in radians per second. Decrease
+          VecBuilder.fill(20), // qelms. Velocity error tolerance, in radians per second. Decrease
           // this to more heavily penalize state excursion, or make the controller behave more
           // aggressively.
-          VecBuilder.fill(12), // relms. Control effort (voltage) tolerance. Decrease this to more
+          VecBuilder.fill(6), // relms. Control effort (voltage) tolerance. Decrease this to more
           // heavily penalize control effort, or make the controller less aggressive. 12 is a good
           // starting point because that is the (approximate) maximum voltage of a battery.
           0.020); // Nominal time between loops. 0.020 for TimedRobot, but can be
@@ -90,7 +91,7 @@ public class Robot extends TimedRobot {
 
   // The state-space loop combines a controller, observer, feedforward and plant for easy control.
   private final LinearSystemLoop<N1, N1, N1> m_loop =
-      new LinearSystemLoop<>(m_flywheelPlant, m_controller, m_observer, 12.0, 0.020);
+      new LinearSystemLoop<>(m_flywheelPlant, m_controller, m_observer, 12, 0.020);
 
   // An encoder set up to measure flywheel velocity in radians per second.
   private final Encoder m_encoder = new Encoder(kEncoderAChannel, kEncoderBChannel);
@@ -166,7 +167,8 @@ public class Robot extends TimedRobot {
 
   @Override
   public void teleopPeriodic() {
-    if (SmartDashboard.getBoolean("spinup", false)) {
+    spinningUp = SmartDashboard.getBoolean("spinup", false);
+    if (spinningUp) {
       // We just pressed the trigger, so let's set our next reference
       m_loop.setNextR(VecBuilder.fill(SmartDashboard.getNumber("target", 0))); 
     }
@@ -174,12 +176,13 @@ public class Robot extends TimedRobot {
       m_loop.setNextR(VecBuilder.fill(0)); 
     }
 
+    SmartDashboard.putNumber("controller error", m_loop.getError().get(0, 0));
     m_loop.correct(VecBuilder.fill(getEncoderRadsPerSec()));
+    SmartDashboard.putNumber("encoder rads per sec", getEncoderRadsPerSec());
     m_loop.predict(0.020);
     double nextVoltage = m_loop.getU(0);
-
-    if (!SmartDashboard.getBoolean("spinup", false)); nextVoltage = 0; //if we are spinning down we dont want to fight down
-
+    System.out.println(nextVoltage);
+    if (!spinningUp) nextVoltage = 0;
     lead.set(TalonFXControlMode.PercentOutput, nextVoltage/RobotController.getBatteryVoltage());
 
 
